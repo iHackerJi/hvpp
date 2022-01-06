@@ -26,10 +26,10 @@ HvppSetup(
 {
   HvppPassthroughSetup(Passthrough);
 
-  PEPT Ept = HvppEptCreate();
-  HvppEptMapIdentity(Ept);
+  PEPT Ept = HvppEptCreate();//ept_t
+  HvppEptMapIdentity(Ept);//映射前512GB的内存
 
-  HvppVcpuEnableEpt(Vcpu);
+  HvppVcpuEnableEpt(Vcpu);//就是写个MSR
   HvppVcpuSetEpt(Vcpu, Ept);
 
   PPER_VCPU_DATA UserData = HvppAllocate(sizeof(PER_VCPU_DATA));

@@ -1096,7 +1096,7 @@ void vcpu_t::host_rip(uint64_t rip) noexcept
 // If the processor supports the Intel 64 architecture and
 // the processor supports N < 64 linear address bits, each
 // of bits 63:N of each base address is set to the value of
-// bit N–1 of that base address.
+// bit N? of that base address.
 // The GDTR and IDTR limits are each set to FFFFH.
 // (ref: Vol3C[27.5.2(Loading Host Segment and Descriptor-Table Registers)])
 //

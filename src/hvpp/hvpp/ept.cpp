@@ -71,11 +71,43 @@ void ept_t::map_identity(epte_t::access_type access /* = epte_t::access_type::re
   //     loss.
   //
 
+//
+  // 此方法将映射 EPT 以使其镜像
+  // 将物理内存托管给来宾。这意味着物理内存
+  //在guest中地址0x4000处将指向物理内存
+  // 在主机中的地址 0x4000。
+  //
+  // 仅覆盖前 512 GB 的物理内存 - 希望如此
+  // 应该涵盖大多数情况，包括 MMIO - 并且使用了 2MB 页面。
+  // 很有可能不会发生 EPT 违规
+  // 设置（假设 EPT 结构和/或访问未修改）。
+  //
+  // 使用 2MB 页面有以下好处：
+  // - 与 4kb 页面相比，它需要更少的内存来覆盖相同的页面
+  //地址空间。
+  // - CPU 在分页层次结构中花费的时间更少（少一级）。
+  // - 此函数运行速度更快，因为它不必额外映射 512
+  // 每 2MB 页的条目。
+  //
+  // 使用 2MB 页面也有以下缺点：
+  // - 2MB 页面的挂钩不方便，因为我们会非常频繁
+  // EPT 违规。如果我们想在更小的粒度上做 EPT 钩子
+  //（即 4kb）我们必须将所需的 2MB 页面拆分为 4kb 页面。
+  // - MTRR 冲突的风险更高 - 参见 mtrr::type() 方法实现 -
+  // 如果单个 2MB 页面中包含两个或多个 MTRR，并且那些
+  // MTRRs的类型不同，整个2MB页面的内存类型
+  // 必须设置为“最不危险”选项。最坏的情况是如果
+  // UC（未缓存）内存类型与其他内容发生冲突 - 整个页面
+  // 然后必须设置为 UC 类型。这可能会导致轻微的性能
+  //     损失。
+  //
+
+
   static constexpr auto _512gb = 512ull * 1024
                                         * 1024
-                                        * 1024;
+                                        * 1024;//512gb字节
 
-  for (pa_t pa = 0; pa < _512gb; pa += ept_pd_t::size)
+  for (pa_t pa = 0; pa < _512gb; pa += ept_pd_t::size)//ept_pd_t::size==2MB字节
   {
     map_2mb(pa, pa, access);
   }
@@ -127,6 +159,7 @@ epte_t* ept_t::map(pa_t guest_pa, pa_t host_pa,
   // The range of mapped memory is derived from the size of the paging
   // structure.
   //
+
   return map_pml4(guest_pa, host_pa, epml4_, access, level);
 }
 
@@ -441,8 +474,8 @@ epte_t* ept_t::map_subtable(epte_t* table) noexcept
 epte_t* ept_t::map_pml4(pa_t guest_pa, pa_t host_pa, epte_t* pml4,
                         epte_t::access_type access, pml level) noexcept
 {
-  const auto pml4e = &pml4[guest_pa.offset(pml::pml4)];
-  const auto pdpt = map_subtable(pml4e);
+  const auto pml4e = &pml4[guest_pa.offset(pml::pml4)];//拿到客户机的地址的PML4
+  const auto pdpt = map_subtable(pml4e);//通过PML4拿到pdpdt
 
   return map_pdpt(guest_pa, host_pa, pdpt, access, level);
 }
@@ -453,7 +486,7 @@ epte_t* ept_t::map_pdpt(pa_t guest_pa, pa_t host_pa, epte_t* pdpt,
   const auto pdpte = &pdpt[guest_pa.offset(pml::pdpt)];
 
   if (level == pml::pdpt)
-  {
+  {//如果是映射的话则开始映射了
     pdpte->update(host_pa, mm::mtrr_descriptor().type(guest_pa), true, access);
     return pdpte;
   }
